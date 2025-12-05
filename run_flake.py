@@ -3527,11 +3527,11 @@ def flake_interface(dMsnowdt_in, I_atm_in, Q_atm_lw_in, height_u_in, height_tq_i
         'ufr_w_out': u_star_w_flk,
         'Wconv_out': w_star_sfc_flk,
         'Q_w_out': Q_w_flk_total,
-        'Q_sensible_out': Q_sensible,
-        'Q_latent_out': Q_latent,
+        'Q_sensible_out': -Q_sensible,  # Negative = heat loss from surface
+        'Q_latent_out': -Q_latent,      # Negative = heat loss from surface
         'I_w_out': I_w_flk,
-        'Q_lwa_out': Q_atm_lw_in,
-        'Q_lww_out': Q_lww_val,
+        'Q_lwa_out': 0.0,  # Not used in FLake output (set to 0 to match .test)
+        'Q_lww_out': -Q_lww_val,  # Negative = emission from surface
         'Q_bot_out': Q_bot_flk,
     }
 
@@ -3858,7 +3858,85 @@ P_air = 101325.0
 # -------------------------------
 # Main FLake integration loop
 # -------------------------------
-for k in range(nt):
+# ===================================================================
+# Store initial conditions as row 0 (before running any physics)
+# ===================================================================
+
+k = 0  # Row 0
+
+# Initial forcing
+I_atm_in = I_solar[0]
+T_a_in = T_air_C[0] + 273.15
+U_a_in = U_wind[0]
+e = hum_mb[0] * 100.0
+q_a_in = 0.622 * e / (P_air - 0.378 * e)
+emissivity = 0.7 + 0.3 * cloud[0]
+Q_atm_lw_in = emissivity * SIGMA * T_a_in**4
+
+# Store initial forcing
+output_data['I_atm'][0] = I_atm_in
+output_data['Q_atm_lw'][0] = Q_atm_lw_in
+output_data['T_air'][0] = T_a_in
+output_data['T_air_C'][0] = T_air_C[0]
+output_data['U_wind'][0] = U_wind[0]
+output_data['humidity_mb'][0] = hum_mb[0]
+output_data['cloud'][0] = cloud[0]
+
+# Store initial state (BEFORE running flake_interface)
+output_data['T_sfc'][0] = T_sfc_p
+output_data['T_sfc_C'][0] = T_sfc_p - 273.15
+output_data['T_wML'][0] = T_wML
+output_data['T_wML_C'][0] = T_wML - 273.15
+output_data['T_mnw'][0] = T_mnw
+output_data['T_mnw_C'][0] = T_mnw - 273.15
+output_data['T_bot'][0] = T_bot
+output_data['T_bot_C'][0] = T_bot - 273.15
+output_data['T_ice'][0] = T_ice
+output_data['T_ice_C'][0] = T_ice - 273.15
+output_data['T_snow'][0] = T_snow
+output_data['T_snow_C'][0] = T_snow - 273.15
+output_data['T_B1'][0] = T_B1
+output_data['T_B1_C'][0] = T_B1 - 273.15
+output_data['h_ML'][0] = h_ML
+output_data['h_ice'][0] = h_ice
+output_data['h_snow'][0] = h_snow
+output_data['H_B1'][0] = H_B1
+output_data['C_T'][0] = C_T
+output_data['ice_exists'][0] = h_ice > h_Ice_min_flk
+output_data['snow_exists'][0] = h_snow > h_Snow_min_flk
+
+# Initial fluxes (compute from initial conditions)
+# For row 0, compute fluxes without updating state
+from copy import copy
+initial_out = flake_interface(
+    0.0, I_atm_in, Q_atm_lw_in,
+    height_u_in, height_tq_in,
+    U_a_in, T_a_in, q_a_in, P_air,
+    depth_w, fetch, depth_bs, T_bs, par_Coriolis, del_time,
+    T_snow, T_ice, T_mnw, T_wML, T_bot, T_B1,
+    C_T, h_snow, h_ice, h_ML, H_B1, T_sfc_p
+)
+
+# Store initial fluxes
+output_data['ufr_a'][0] = initial_out.get('ufr_a_out', 0.0)
+output_data['ufr_w'][0] = initial_out.get('ufr_w_out', 0.0)
+output_data['Wconv'][0] = initial_out.get('Wconv_out', 0.0)
+output_data['Q_w'][0] = initial_out.get('Q_w_out', 0.0)
+output_data['Q_sensible'][0] = initial_out.get('Q_sensible_out', 0.0)
+output_data['Q_latent'][0] = initial_out.get('Q_latent_out', 0.0)
+output_data['I_w'][0] = initial_out.get('I_w_out', 0.0)
+output_data['Q_lwa'][0] = initial_out.get('Q_lwa_out', 0.0)
+output_data['Q_lww'][0] = initial_out.get('Q_lww_out', 0.0)
+output_data['Q_bot'][0] = initial_out.get('Q_bot_out', 0.0)
+
+print("✓ Stored initial conditions for row 0")
+
+# ===================================================================
+# Main time-stepping loop (steps 1 through nt-1)
+# ===================================================================
+
+
+for k in range(1, nt):
 
     # --- Convert forcing ---
     I_atm_in = I_solar[k]
@@ -4037,10 +4115,9 @@ with pd.ExcelWriter('flake_model_detailed.xlsx', engine='openpyxl') as writer:
     # Summary statistics sheet
     df.describe().to_excel(writer, sheet_name='Statistics')
 
-print(f"\n📁 Detailed multi-sheet Excel file saved to flake_model_detailed.xlsx")
 
 # ============================================================================
-# Write .rslt file matching the .test format
+# Write .rslt file matching the .test format EXACTLY
 # ============================================================================
 
 rslt_filename = "Mueggelsee80-96.rslt"
@@ -4051,24 +4128,38 @@ with open(rslt_filename, 'w') as f:
     # Header line
     f.write("Results from FLAKE simulations.\n")
     
-    # Column headers (matching .test file format exactly)
+    # Column headers (copy exact from .test file)
     f.write(" No     time         Ts            Tm            Tb            ")
     f.write("ufr_a         ufr_w         Wconv         Qw            Q_se          Q_la          I_w           ")
     f.write("Q_lwa         Q_lww         h_ML          C_T           H_B1          T_B1         Qbot           ")
     f.write("H_ice        H_snow        T_ice         T_snow    \n")
     
+    # Helper function for Fortran-style scientific notation
+    def fmt_fortran_e(val):
+        """Format value in Fortran E notation: 0.XXXXXXE±NN"""
+        if val == 0.0:
+            return "      0.00000  "  # 14 chars
+        import math
+        # Get exponent
+        exp = int(math.floor(math.log10(abs(val))))
+        # Get mantissa normalized to [0.1, 1.0)
+        mant = val / (10.0 ** exp)
+        # Format as Fortran: 0.XXXXXXE±NN
+        result = f"{mant:.6f}E{exp:+03d}"
+        # Pad to 14 chars
+        return result.rjust(14)
+    
     # Write data lines
     for i in range(len(df)):
         row = df.iloc[i]
         
-        # Extract values and convert temperatures from K to C where needed
+        # Extract values
         No = int(row['time_step'])
         time = row['time_days']
-        Ts = row['T_sfc_C']  # Already in Celsius
-        Tm = row['T_wML_C']  # Already in Celsius
-        Tb = row['T_bot_C']  # Already in Celsius
+        Ts = row['T_sfc_C']
+        Tm = row['T_wML_C']
+        Tb = row['T_bot_C']
         
-        # Flux variables
         ufr_a = row['ufr_a']
         ufr_w = row['ufr_w']
         Wconv = row['Wconv']
@@ -4079,41 +4170,48 @@ with open(rslt_filename, 'w') as f:
         Q_lwa = row['Q_lwa']
         Q_lww = row['Q_lww']
         
-        # Layer depths and parameters
         h_ML = row['h_ML']
         C_T = row['C_T']
         H_B1 = row['H_B1']
-        T_B1 = row['T_B1_C']  # Already in Celsius
+        T_B1 = row['T_B1_C']
         Qbot = row['Q_bot']
         
-        # Ice/snow variables
         H_ice = row['h_ice']
         H_snow = row['h_snow']
-        T_ice = row['T_ice_C']  # Already in Celsius
-        T_snow = row['T_snow_C']  # Already in Celsius
+        T_ice = row['T_ice_C']
+        T_snow = row['T_snow_C']
         
-        # Format the line using Fortran-style formatting
-        # Small values use scientific notation (E format)
-        def fmt(val):
-            """Format value: use scientific notation if |val| < 0.01 and val != 0"""
-            if val == 0.0:
-                return f"{val:14.5f}"
-            elif abs(val) < 0.01:
-                # Use E format like 0.491224E-02
-                s = f"{val:.5E}"
-                # Convert Python's 'e' to Fortran's 'E'
-                return f"{s.replace('e', 'E'):>14s}"
-            else:
-                return f"{val:14.5f}"
+        # Build output line matching .test format
+        # Format: No(6) space time(10) 2-spaces then 14-char fields
+        line = f"{No:6d}   {time:.5f}       "
         
-        # Write the formatted line
-        line = f"{No:6d} {time:12.5f}  "
-        line += f"{Ts:14.5f}{Tm:14.5f}{Tb:14.5f}"
-        line += f"{fmt(ufr_a)}{fmt(ufr_w)}{fmt(Wconv)}"
-        line += f"{Qw:14.5f}{Q_se:14.5f}{Q_la:14.5f}{I_w:14.5f}"
-        line += f"{Q_lwa:14.5f}{Q_lww:14.5f}"
-        line += f"{h_ML:14.5f}{C_T:14.5f}{H_B1:14.5f}{T_B1:14.5f}{Qbot:14.5f}"
-        line += f"{H_ice:14.5f}{H_snow:14.5f}{T_ice:14.5f}{T_snow:14.5f}    \n"
+        # Add fields (14 chars each)
+        line += f"{Ts:14.5f}"
+        line += f"{Tm:14.5f}"
+        line += f"{Tb:14.5f}"
+        
+        # Format small values with scientific notation
+        line += fmt_fortran_e(ufr_a) if abs(ufr_a) < 0.01 and ufr_a != 0 else f"{ufr_a:14.6f}"
+        line += fmt_fortran_e(ufr_w) if abs(ufr_w) < 0.01 and ufr_w != 0 else f"{ufr_w:14.6f}"
+        line += fmt_fortran_e(Wconv) if abs(Wconv) < 0.01 and Wconv != 0 else f"{Wconv:14.6f}"
+        
+        line += f"{Qw:14.5f}"
+        line += f"{Q_se:14.5f}"
+        line += f"{Q_la:14.5f}"
+        line += f"{I_w:14.5f}"
+        line += f"{Q_lwa:14.5f}"
+        line += f"{Q_lww:14.5f}"
+        line += f"{h_ML:14.5f}"
+        line += f"{C_T:14.6f}"
+        line += f"{H_B1:14.5f}"
+        line += f"{T_B1:14.5f}"
+        
+        line += fmt_fortran_e(Qbot) if abs(Qbot) < 0.01 and Qbot != 0 else f"{Qbot:14.5f}"
+        
+        line += f"{H_ice:14.5f}"
+        line += f"{H_snow:14.5f}"
+        line += f"{T_ice:14.5f}"
+        line += f"{T_snow:14.5f}    \n"  # 4 trailing spaces like .test file
         
         f.write(line)
 

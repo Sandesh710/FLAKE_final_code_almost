@@ -1,0 +1,3 @@
+Results from FLAKE simulations.
+ No     time         Ts            Tm            Tb            ufr_a         ufr_w         Wconv         Qw            Q_se          Q_la          I_w           Q_lwa         Q_lww         h_ML          C_T           H_B1          T_B1         Qbot           H_ice        H_snow        T_ice         T_snow    
+     0      0.00000         3.59214       3.59214       3.59214       0.13876   4.94471E-03   5.98652E-04    -105.04131      29.30561      27.48055      15.82293     282.93527     331.19043       4.50000       0.50000       3.00000       4.00000      -0.00000       0.00000       0.00000       0.00000       0.00000    
