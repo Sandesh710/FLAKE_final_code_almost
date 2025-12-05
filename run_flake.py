@@ -3883,8 +3883,13 @@ output_data['humidity_mb'][0] = hum_mb[0]
 output_data['cloud'][0] = cloud[0]
 
 # Store initial state (BEFORE running flake_interface)
-output_data['T_sfc'][0] = T_sfc_p
-output_data['T_sfc_C'][0] = T_sfc_p - 273.15
+# Apply threshold: Ts = 0°C when ice exists
+if h_ice > h_Ice_min_flk:
+    output_data['T_sfc'][0] = 273.15  # 0°C
+    output_data['T_sfc_C'][0] = 0.0
+else:
+    output_data['T_sfc'][0] = T_sfc_p
+    output_data['T_sfc_C'][0] = T_sfc_p - 273.15
 output_data['T_wML'][0] = T_wML
 output_data['T_wML_C'][0] = T_wML - 273.15
 output_data['T_mnw'][0] = T_mnw
@@ -4001,8 +4006,13 @@ for k in range(1, nt):
     Q_bot = out.get('Q_bot_out', 0.0)
 
     # --- Store ALL output data ---
-    output_data['T_sfc'][k] = T_sfc_n
-    output_data['T_sfc_C'][k] = T_sfc_n - 273.15
+    # Apply threshold: Ts = 0°C when ice exists (physical constraint)
+    if h_ice > h_Ice_min_flk:
+        output_data['T_sfc'][k] = 273.15  # 0°C  
+        output_data['T_sfc_C'][k] = 0.0
+    else:
+        output_data['T_sfc'][k] = T_sfc_n
+        output_data['T_sfc_C'][k] = T_sfc_n - 273.15
     output_data['T_wML'][k] = T_wML
     output_data['T_wML_C'][k] = T_wML - 273.15
     output_data['T_mnw'][k] = T_mnw
@@ -4041,10 +4051,15 @@ for k in range(1, nt):
 
 # Convert dictionary to DataFrame
 # Create DataFrame with ONLY .test file columns (for easy comparison)
+# Apply threshold: Ts = 0 when ice exists (ensure consistency)
+Ts_values = output_data['T_sfc_C'].copy()
+ice_mask = output_data['h_ice'] > h_Ice_min_flk
+Ts_values[ice_mask] = 0.0
+
 test_file_df = pd.DataFrame({
     'No': output_data['time_step'],
     'time': output_data['time_days'],
-    'Ts': output_data['T_sfc_C'],
+    'Ts': Ts_values,
     'Tm': output_data['T_wML_C'],
     'Tb': output_data['T_bot_C'],
     'ufr_a': output_data['ufr_a'],
@@ -4216,7 +4231,7 @@ print(f"Ice present on {(df['H_ice'] > 0).sum()} days ({(df['H_ice'] > 0).sum()/
 if (df['H_ice'] > 0).any():
     print(f"Max ice thickness: {df['H_ice'].max()*100:.2f} cm")
 if (df['H_snow'] > 0).any():
-    print(f"Max snow thickness: {df['H_snow']*100.max():.2f} cm")
+    print(f"Max snow thickness: {(df['H_snow']*100).max():.2f} cm")
 print(f"Mixed layer depth range: {df['h_ML'].min():.3f} to {df['h_ML'].max():.3f} m")
 print(f"Shape factor C_T range: {df['C_T'].min():.3f} to {df['C_T'].max():.3f}")
 

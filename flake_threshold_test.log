@@ -1,0 +1,4 @@
+  File "/home/user/FLAKE_final_code_almost/run_flake.py", line 4234
+    (df['H_snow']*100.max())
+                     ^
+SyntaxError: invalid decimal literal
