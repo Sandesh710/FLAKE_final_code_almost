@@ -4040,80 +4040,65 @@ for k in range(1, nt):
 # -------------------------------
 
 # Convert dictionary to DataFrame
-df = pd.DataFrame(output_data)
+# Create DataFrame with ONLY .test file columns (for easy comparison)
+test_file_df = pd.DataFrame({
+    'No': output_data['time_step'],
+    'time': output_data['time_days'],
+    'Ts': output_data['T_sfc_C'],
+    'Tm': output_data['T_wML_C'],
+    'Tb': output_data['T_bot_C'],
+    'ufr_a': output_data['ufr_a'],
+    'ufr_w': output_data['ufr_w'],
+    'Wconv': output_data['Wconv'],
+    'Qw': output_data['Q_w'],
+    'Q_se': output_data['Q_sensible'],
+    'Q_la': output_data['Q_latent'],
+    'I_w': output_data['I_w'],
+    'Q_lwa': output_data['Q_lwa'],
+    'Q_lww': output_data['Q_lww'],
+    'h_ML': output_data['h_ML'],
+    'C_T': output_data['C_T'],
+    'H_B1': output_data['H_B1'],
+    'T_B1': output_data['T_B1_C'],
+    'Qbot': output_data['Q_bot'],
+    'H_ice': output_data['h_ice'],
+    'H_snow': output_data['h_snow'],
+    'T_ice': output_data['T_ice_C'],
+    'T_snow': output_data['T_snow_C']
+})
 
-# Add additional calculated columns if needed
-df['ice_thickness_cm'] = df['h_ice'] * 100
-df['snow_thickness_cm'] = df['h_snow'] * 100
-df['mixed_layer_depth_m'] = df['h_ML']
-df['day_of_year'] = np.mod(df['time_days'], 365).astype(int)
-
-# Reorder columns for better readability
-column_order = [
-    'time_step', 'time_days', 'day_of_year',
-    'T_sfc_C', 'T_sfc', 
-    'T_wML_C', 'T_wML',
-    'T_mnw_C', 'T_mnw',
-    'T_bot_C', 'T_bot',
-    'T_ice_C', 'T_ice',
-    'T_snow_C', 'T_snow',
-    'T_B1_C', 'T_B1',
-    'ice_exists', 'h_ice', 'ice_thickness_cm',
-    'snow_exists', 'h_snow', 'snow_thickness_cm',
-    'h_ML', 'mixed_layer_depth_m',
-    'H_B1', 'C_T',
-    # Flux variables
-    'ufr_a', 'ufr_w', 'Wconv',
-    'Q_w', 'Q_sensible', 'Q_latent',
-    'I_w', 'Q_lwa', 'Q_lww', 'Q_bot',
-    'I_atm', 'Q_atm_lw',
-    'T_air_C', 'T_air',
-    'U_wind', 'humidity_mb', 'cloud'
-]
-
-df = df[column_order]
-
-# Save to Excel
+# Save Excel with ONLY .test columns (23 columns for easy comparison)
 output_filename = "flake_model_output.xlsx"
-df.to_excel(output_filename, index=False)
+test_file_df.to_excel(output_filename, index=False)
 
-print(f"\n✅ All model outputs saved to {output_filename}")
-print(f"   Total rows: {len(df)}")
-print(f"   Total columns: {len(df.columns)}")
-print(f"\nFirst few rows:")
-print(df.head(10))
-print(f"\nColumn names:")
-for i, col in enumerate(df.columns, 1):
+print(f"\n✅ Excel output saved: {output_filename}")
+print(f"   Columns: {len(test_file_df.columns)} (matching .test file exactly)")
+print(f"   Rows: {len(test_file_df)}")
+
+print(f"\nColumn names (same order as .test file):")
+for i, col in enumerate(test_file_df.columns, 1):
     print(f"{i:3d}. {col}")
 
-# -------------------------------
-# Also save a summary CSV
-# -------------------------------
-summary_filename = "flake_model_summary.csv"
-df.describe().to_csv(summary_filename)
-print(f"\n📊 Summary statistics saved to {summary_filename}")
+# Also save summary statistics
+summary_stats = test_file_df.describe()
+summary_stats.to_csv('flake_model_summary.csv')
 
-# -------------------------------
-# Optional: Save to multiple sheets for different variable groups
-# -------------------------------
-with pd.ExcelWriter('flake_model_detailed.xlsx', engine='openpyxl') as writer:
-    # Main sheet with all data
-    df.to_excel(writer, sheet_name='All_Data', index=False)
-    
-    # Temperature sheet
-    temp_cols = [col for col in df.columns if 'T_' in col or 'time' in col]
-    df[temp_cols].to_excel(writer, sheet_name='Temperatures', index=False)
-    
-    # Thickness sheet
-    thick_cols = [col for col in df.columns if 'h_' in col or 'H_' in col or 'time' in col or 'ice_exists' in col or 'snow_exists' in col or 'thickness' in col]
-    df[thick_cols].to_excel(writer, sheet_name='Thicknesses', index=False)
-    
-    # Forcing sheet
-    forcing_cols = [col for col in df.columns if col in ['time_step', 'time_days', 'day_of_year', 'I_atm', 'Q_atm_lw', 'T_air_C', 'U_wind', 'humidity_mb', 'cloud']]
-    df[forcing_cols].to_excel(writer, sheet_name='Forcing', index=False)
-    
-    # Summary statistics sheet
-    df.describe().to_excel(writer, sheet_name='Statistics')
+print(f"\n📊 Summary statistics saved to flake_model_summary.csv")
+
+# Create detailed version with all columns for analysis
+df_detailed = pd.DataFrame(output_data)
+df_detailed['ice_thickness_cm'] = df_detailed['h_ice'] * 100
+df_detailed['snow_thickness_cm'] = df_detailed['h_snow'] * 100
+df_detailed['mixed_layer_depth_m'] = df_detailed['h_ML']
+df_detailed['day_of_year'] = np.mod(df_detailed['time_days'], 365).astype(int)
+
+df_detailed.to_excel('flake_model_detailed.xlsx', index=False)
+
+print(f"\n📁 Detailed output (all {len(df_detailed.columns)} columns): flake_model_detailed.xlsx")
+
+# Use test_file_df as 'df' for .rslt writer
+df = test_file_df
+
 
 
 # ============================================================================
@@ -4153,19 +4138,19 @@ with open(rslt_filename, 'w') as f:
     for i in range(len(df)):
         row = df.iloc[i]
         
-        # Extract values
-        No = int(row['time_step'])
-        time = row['time_days']
-        Ts = row['T_sfc_C']
-        Tm = row['T_wML_C']
-        Tb = row['T_bot_C']
+        # Extract values (df now has .test column names)
+        No = int(row['No'])
+        time = row['time']
+        Ts = row['Ts']
+        Tm = row['Tm']
+        Tb = row['Tb']
         
         ufr_a = row['ufr_a']
         ufr_w = row['ufr_w']
         Wconv = row['Wconv']
-        Qw = row['Q_w']
-        Q_se = row['Q_sensible']
-        Q_la = row['Q_latent']
+        Qw = row['Qw']
+        Q_se = row['Q_se']
+        Q_la = row['Q_la']
         I_w = row['I_w']
         Q_lwa = row['Q_lwa']
         Q_lww = row['Q_lww']
@@ -4173,13 +4158,13 @@ with open(rslt_filename, 'w') as f:
         h_ML = row['h_ML']
         C_T = row['C_T']
         H_B1 = row['H_B1']
-        T_B1 = row['T_B1_C']
-        Qbot = row['Q_bot']
+        T_B1 = row['T_B1']
+        Qbot = row['Qbot']
         
-        H_ice = row['h_ice']
-        H_snow = row['h_snow']
-        T_ice = row['T_ice_C']
-        T_snow = row['T_snow_C']
+        H_ice = row['H_ice']
+        H_snow = row['H_snow']
+        T_ice = row['T_ice']
+        T_snow = row['T_snow']
         
         # Build output line matching .test format
         # Format: No(6) space time(10) 2-spaces then 14-char fields
@@ -4224,14 +4209,14 @@ print(f"   Total data rows: {len(df)}")
 # Print some key statistics
 # -------------------------------
 print("\n📈 KEY STATISTICS:")
-print(f"Surface temperature range: {df['T_sfc_C'].min():.2f} to {df['T_sfc_C'].max():.2f} °C")
-print(f"Mixed layer temp range: {df['T_wML_C'].min():.2f} to {df['T_wML_C'].max():.2f} °C")
-print(f"Bottom temperature range: {df['T_bot_C'].min():.2f} to {df['T_bot_C'].max():.2f} °C")
-print(f"Ice present on {df['ice_exists'].sum()} days ({df['ice_exists'].sum()/len(df)*100:.1f}%)")
-if df['ice_exists'].any():
-    print(f"Max ice thickness: {df['ice_thickness_cm'].max():.2f} cm")
-if df['snow_exists'].any():
-    print(f"Max snow thickness: {df['snow_thickness_cm'].max():.2f} cm")
+print(f"Surface temperature range: {df['Ts'].min():.2f} to {df['Ts'].max():.2f} °C")
+print(f"Mixed layer temp range: {df['Tm'].min():.2f} to {df['Tm'].max():.2f} °C")
+print(f"Bottom temperature range: {df['Tb'].min():.2f} to {df['Tb'].max():.2f} °C")
+print(f"Ice present on {(df['H_ice'] > 0).sum()} days ({(df['H_ice'] > 0).sum()/len(df)*100:.1f}%)")
+if (df['H_ice'] > 0).any():
+    print(f"Max ice thickness: {df['H_ice'].max()*100:.2f} cm")
+if (df['H_snow'] > 0).any():
+    print(f"Max snow thickness: {df['H_snow']*100.max():.2f} cm")
 print(f"Mixed layer depth range: {df['h_ML'].min():.3f} to {df['h_ML'].max():.3f} m")
 print(f"Shape factor C_T range: {df['C_T'].min():.3f} to {df['C_T'].max():.3f}")
 
@@ -4240,26 +4225,6 @@ print(f"Shape factor C_T range: {df['C_T'].min():.3f} to {df['C_T'].max():.3f}")
 # -------------------------------
 import matplotlib.pyplot as plt
 
-plt.figure(figsize=(12, 6))
-plt.plot(df['time_days'], df['T_sfc_C'], label='Surface Temp (°C)', color='blue')
-plt.plot(df['time_days'], df['T_wML_C'], label='Mixed Layer Temp (°C)', color='red', alpha=0.7)
-plt.xlabel('Time (days)')
-plt.ylabel('Temperature (°C)')
-plt.title('FLake Model - Surface and Mixed Layer Temperature')
-plt.legend()
-plt.grid(True, alpha=0.3)
-plt.tight_layout()
-plt.savefig('flake_temperature_plot.png', dpi=150)
-plt.show()
-
-print(f"\n📊 Temperature plot saved to 'flake_temperature_plot.png'")
-
-
-# ============================================================================
-# Validation: Compare .rslt output with .test file
-# ============================================================================
-
-print("\n" + "="*80)
 print("VALIDATION: Comparing .rslt output with .test file")
 print("="*80)
 
